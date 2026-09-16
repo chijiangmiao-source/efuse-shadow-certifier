@@ -128,6 +128,41 @@ describe('已知位', () => {
     }));
     expect(errs[0]).toContain('known[0] 必须是 [r,c,v]');
   });
+
+  it('回归：首次取值非法、再次重复同坐标时仍须报重复', () => {
+    const errs = errorsOf(JSON.stringify({
+      height: 2, width: 2,
+      rowCounts: [0, 0], colCounts: [0, 0],
+      known: [[0, 0, 2], [0, 0, 1]],
+      blocks: [],
+    }));
+    // 第一次：取值错误；第二次：重复坐标。首值非法不构成取值冲突。
+    expect(errs.filter((e) => e.includes('v 必须是 0 或 1')).length).toBe(1);
+    expect(errs.some((e) => e.includes('重复坐标 (0,0)'))).toBe(true);
+    expect(errs.some((e) => e.includes('冲突'))).toBe(false);
+  });
+
+  it('回归：两个不同的越界坐标不得因线性压缩碰撞被误报重复', () => {
+    // W=2 时旧键 r*W+c：(1,3)→5 与 (2,1)→5 碰撞。
+    const errs = errorsOf(JSON.stringify({
+      height: 2, width: 2,
+      rowCounts: [0, 0], colCounts: [0, 0],
+      known: [[1, 3, 0], [2, 1, 1]],
+      blocks: [],
+    }));
+    expect(errs.some((e) => e.includes('重复坐标'))).toBe(false);
+    expect(errs.some((e) => e.includes('known[0]') && e.includes('c 越界'))).toBe(true);
+    expect(errs.some((e) => e.includes('known[1]') && e.includes('r 越界'))).toBe(true);
+
+    // 负坐标与合法坐标的旧键也会碰撞：(-1,3)→1 与 (0,1)→1。
+    const errs2 = errorsOf(JSON.stringify({
+      height: 2, width: 2,
+      rowCounts: [0, 0], colCounts: [0, 0],
+      known: [[-1, 3, 0], [0, 1, 1]],
+      blocks: [],
+    }));
+    expect(errs2.some((e) => e.includes('重复坐标'))).toBe(false);
+  });
 });
 
 describe('区块', () => {
@@ -167,6 +202,35 @@ describe('区块', () => {
       blocks: [[0, 0, 3]],
     }));
     expect(errs.some((e) => e.includes('p 为四位异或'))).toBe(true);
+  });
+
+  it('回归：两个不同的越界区块坐标不得被误报重复', () => {
+    // W=2 时旧键 r*W+c：(1,3)→5 与 (2,1)→5 碰撞。
+    const errs = errorsOf(JSON.stringify({
+      height: 2, width: 2,
+      rowCounts: [0, 0], colCounts: [0, 0], known: [],
+      blocks: [[1, 3, 0], [2, 1, 1]],
+    }));
+    expect(errs.some((e) => e.includes('重复区块坐标'))).toBe(false);
+    expect(errs.filter((e) => e.includes('区块越界')).length).toBeGreaterThan(0);
+
+    // 负坐标碰撞：(-1,3)→1 与 (0,1)→1。
+    const errs2 = errorsOf(JSON.stringify({
+      height: 2, width: 2,
+      rowCounts: [0, 0], colCounts: [0, 0], known: [],
+      blocks: [[-1, 3, 0], [0, 1, 1]],
+    }));
+    expect(errs2.some((e) => e.includes('重复区块坐标'))).toBe(false);
+  });
+
+  it('回归：首次 p 非法、再次重复同坐标时仍须报重复区块', () => {
+    const errs = errorsOf(JSON.stringify({
+      height: 3, width: 3,
+      rowCounts: [1, 1, 1], colCounts: [1, 1, 1], known: [],
+      blocks: [[0, 0, 5], [0, 0, 0]],
+    }));
+    expect(errs.some((e) => e.includes('p 为四位异或'))).toBe(true);
+    expect(errs.some((e) => e.includes('重复区块坐标 (0,0)'))).toBe(true);
   });
 });
 

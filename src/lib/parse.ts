@@ -90,7 +90,9 @@ function validateKnown(
     return null;
   }
 
-  const seen = new Map<number, number>();
+  // 用字符串坐标键（而非 r*W+c 线性压缩）：越界/负坐标线性压缩会互相碰撞，
+  // 造成两个不同坐标被误报重复。值为 null 表示该坐标首次出现时取值非法。
+  const seen = new Map<string, number | null>();
   const out: Array<[number, number, number]> = [];
 
   value.forEach((entry, i) => {
@@ -109,18 +111,20 @@ function validateKnown(
     if (cBad) errors.push(`known[${i}] 的 c 越界或非整数（当前 ${c}，允许 0..${dims.width ? W - 1 : '?'}）`);
     if (vBad) errors.push(`known[${i}] 的 v 必须是 0 或 1（当前 ${v}）`);
 
-    // 坐标为整数即可进行重复判定（即使越界，重复仍是独立错误）。
+    // 坐标为整数即可进行重复判定（即使越界或取值非法，重复仍是独立错误）。
     if (Number.isInteger(r) && Number.isInteger(c)) {
-      const key = r * (W || 1) + c;
+      const key = `${r},${c}`;
       const prev = seen.get(key);
       if (prev !== undefined) {
         errors.push(`known[${i}] 重复坐标 (${r},${c})`);
-        if (!vBad && prev !== v) {
+        // 仅当两次取值都合法且不一致时才构成已知位冲突。
+        if (prev !== null && !vBad && prev !== v) {
           errors.push(`known[${i}] 与已知位冲突 (${r},${c})：${prev} ≠ ${v}`);
         }
       } else {
-        // 越界条目不进入谜题，但仍登记，以便后续重复一并报错。
-        if (!vBad) seen.set(key, v);
+        // 无论取值是否合法都登记坐标，保证后续重复不漏报；
+        // 越界或非法条目不进入谜题。
+        seen.set(key, vBad ? null : v);
         if (!rBad && !cBad && !vBad) out.push([r, c, v]);
       }
     }
@@ -140,7 +144,8 @@ function validateBlocks(
     return null;
   }
 
-  const seen = new Set<number>();
+  // 字符串坐标键，避免越界/负坐标的线性压缩碰撞误报重复。
+  const seen = new Set<string>();
   const out: Array<[number, number, number]> = [];
 
   value.forEach((entry, i) => {
@@ -160,8 +165,9 @@ function validateBlocks(
     if (cBad) errors.push(`blocks[${i}] 区块越界：c 必须在 0..${dims.width ? W - 2 : '?'}（当前 ${c}）`);
     if (pBad) errors.push(`blocks[${i}] 的 p 为四位异或结果，必须是 0 或 1（当前 ${p}）`);
 
+    // 即使越界或 p 非法也登记坐标，保证后续重复不漏报、不同坐标不误报。
     if (Number.isInteger(r) && Number.isInteger(c)) {
-      const key = r * (W || 1) + c;
+      const key = `${r},${c}`;
       if (seen.has(key)) {
         errors.push(`blocks[${i}] 重复区块坐标 (${r},${c})`);
       } else {
