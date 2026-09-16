@@ -1,0 +1,7 @@
+node_modules
+dist
+pw-browsers
+.git
+.gitignore
+test-results
+playwright-report

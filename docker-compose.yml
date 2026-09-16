@@ -1,0 +1,30 @@
+# 晶圆熔丝阵列复核器 —— 容器编排
+#
+# 常规启动（宿主端口可用 WEB_PORT 覆盖，默认 8080）：
+#   WEB_PORT=9090 docker compose up --build web
+#
+# 一次性验收（运行 Vitest + Playwright，结束即退出，码 0 为通过）：
+#   docker compose build verify && docker compose run --rm verify
+
+services:
+  web:
+    build:
+      context: .
+      target: runtime
+    image: fuse-array-rechecker:latest
+    container_name: fuse-array-web
+    ports:
+      # 容器内固定 4173；宿主侧由 WEB_PORT 覆盖
+      - "${WEB_PORT:-8080}:4173"
+    restart: unless-stopped
+
+  verify:
+    # 不随 `docker compose up` 启动，仅在显式 run 时执行的一次性验收服务
+    profiles: ["verify"]
+    build:
+      context: .
+      target: verify
+    image: fuse-array-rechecker:verify
+    container_name: fuse-array-verify
+    # 覆盖镜像默认命令，显式串起单元、构建与端到端验收
+    command: ["sh", "-c", "npm run test && npm run build && npx playwright test"]
